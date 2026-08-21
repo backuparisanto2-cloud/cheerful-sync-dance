@@ -489,6 +489,114 @@ function IncomePage() {
           </ul>
         )}
       </section>
+
+      <section className="mt-8">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="font-display text-lg font-semibold">Pendapatan lain-lain</h2>
+            <p className="text-xs text-muted-foreground">
+              Total {formatRupiah(totalLain)} dari {filteredOthers.length} catatan.
+            </p>
+          </div>
+          <OtherIncomeFormDialog
+            title="Catat pendapatan lain-lain"
+            onSubmit={async (values) => {
+              await createOther.mutateAsync(toOtherIncomePayload(values));
+            }}
+            trigger={
+              <Button variant="outline" size="sm">
+                <Plus className="mr-2 h-4 w-4" /> Tambah
+              </Button>
+            }
+          />
+        </div>
+
+        {filteredOthers.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-gold-line p-8 text-center text-sm text-muted-foreground">
+            Belum ada pendapatan lain-lain. Catat denda, laundry, parkir, atau pemasukan lain di
+            sini.
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {filteredOthers.map((row) => (
+              <li key={row.id} className="rounded-lg border border-gold-line bg-card p-4 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[11px] tracking-[0.16em] text-muted-foreground uppercase">
+                      {row.payment_method}
+                    </p>
+                    <p className="font-display text-lg font-semibold">{row.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatTanggal(row.income_date)}
+                      {row.payer ? ` • Pembayar: ${row.payer}` : ""}
+                    </p>
+                    {row.description ? <p className="mt-1 text-sm">{row.description}</p> : null}
+                  </div>
+                  <div className="text-right">
+                    <p className="font-display text-lg font-semibold text-primary">
+                      {formatRupiah(row.amount)}
+                    </p>
+                    <div className="mt-2 flex justify-end gap-2">
+                      <OtherIncomeFormDialog
+                        title="Edit pendapatan lain-lain"
+                        initial={otherIncomeInitial(row)}
+                        onSubmit={async (values) => {
+                          await editOther.mutateAsync({
+                            id: row.id,
+                            patch: toOtherIncomePayload(values),
+                          });
+                        }}
+                        trigger={
+                          <Button variant="outline" size="icon" aria-label="Edit">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        }
+                      />
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="outline" size="icon" aria-label="Hapus">
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Hapus pendapatan lain-lain?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              <strong>{row.name}</strong> tanggal {formatTanggal(row.income_date)}{" "}
+                              sebesar {formatRupiah(row.amount)} akan dihapus permanen. Tindakan ini
+                              tidak bisa dibatalkan.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Batal</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => removeOther.mutate(row.id)}>
+                              Hapus
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </div>
+                </div>
+
+                {row.attachments.length > 0 ? (
+                  <ul className="mt-3 flex flex-wrap gap-2">
+                    {row.attachments.map((path) => (
+                      <li key={path}>
+                        <SignedImage
+                          path={path}
+                          alt={`Tanda terima ${row.name}`}
+                          className="h-16 w-16 rounded-md border border-gold-line object-cover"
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </AppShell>
   );
 }
