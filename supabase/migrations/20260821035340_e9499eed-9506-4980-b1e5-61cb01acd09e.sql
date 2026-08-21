@@ -1,2 +1,0 @@
-ALTER TABLE public.room_items ADD COLUMN IF NOT EXISTS brand text, ADD COLUMN IF NOT EXISTS serial_number text;
-ALTER TABLE public.shared_items ADD COLUMN IF NOT EXISTS brand text, ADD COLUMN IF NOT EXISTS serial_number text;
