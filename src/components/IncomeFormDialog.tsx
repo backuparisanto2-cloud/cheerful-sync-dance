@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { AttachmentUploader } from "@/components/AttachmentUploader";
+import { ProofUploader } from "@/components/ProofUploader";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -213,8 +213,11 @@ export function IncomeFormDialog({
                 value={values.start_date}
                 onChange={(e) => set("start_date", e.target.value)}
               />
-              <p className="text-[11px] text-muted-foreground">
-                Berlaku sampai {formatTanggal(endDate)}
+              <p className="text-[11px] text-primary">
+                Periode {values.period_type} — berlaku sampai {formatTanggal(endDate)}
+                <span className="block text-muted-foreground">
+                  Tanggal selesai dihitung ulang otomatis saat periode atau tanggal mulai diubah.
+                </span>
               </p>
             </div>
             <div className="space-y-2">
@@ -238,10 +241,11 @@ export function IncomeFormDialog({
             </div>
           </div>
 
-          <AttachmentUploader
+          <ProofUploader
             folder="pendapatan"
             paths={values.attachments}
             onChange={(next) => set("attachments", next)}
+            label="Bukti transfer"
           />
 
           <div className="space-y-2">
