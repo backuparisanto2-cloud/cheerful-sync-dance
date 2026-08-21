@@ -5,6 +5,7 @@ export type Scope = "semua" | "kamar" | "fasilitas";
 export type ReportRow = {
   id: string;
   name: string;
+  code: string | null;
   scope: "kamar" | "fasilitas";
   group: string;
   floor: number | null;
@@ -30,6 +31,7 @@ export function buildRows(
     return {
       id: item.id,
       name: item.name,
+      code: item.code,
       scope: "kamar",
       group: room ? `Kamar ${room.number}` : "Kamar tidak diketahui",
       floor: room?.floor ?? null,
@@ -48,6 +50,7 @@ export function buildRows(
   const fasilitas: ReportRow[] = sharedItems.map((item) => ({
     id: item.id,
     name: item.name,
+    code: item.code,
     scope: "fasilitas",
     group: item.category,
     floor: null,

@@ -129,3 +129,138 @@ export async function deleteIncome(id: string) {
   const { error } = await supabase.from("incomes").delete().eq("id", id);
   if (error) throw new Error(error.message);
 }
+
+/* ---- pendapatan lain-lain ---- */
+
+export type OtherIncome = {
+  id: string;
+  name: string;
+  income_date: string;
+  description: string | null;
+  payer: string | null;
+  payment_method: string;
+  amount: number;
+  attachments: string[];
+};
+
+export type OtherIncomePayload = Omit<OtherIncome, "id">;
+
+export const otherIncomesQuery = {
+  queryKey: ["other_incomes"] as const,
+  queryFn: async (): Promise<OtherIncome[]> => {
+    const rows = unwrap(
+      await supabase
+        .from("other_incomes")
+        .select("id, name, income_date, description, payer, payment_method, amount, attachments")
+        .order("income_date", { ascending: false })
+        .order("created_at", { ascending: false }),
+    ) as Record<string, unknown>[];
+    return rows.map((row) => ({
+      ...row,
+      amount: Number(row['amount'] ?? 0),
+      attachments: Array.isArray(row['attachments'])
+        ? (row['attachments'] as unknown[]).filter((v): v is string => typeof v === "string")
+        : [],
+    })) as OtherIncome[];
+  },
+};
+
+export async function addOtherIncome(input: OtherIncomePayload) {
+  const { error } = await supabase.from("other_incomes").insert(input as never);
+  if (error) throw new Error(error.message);
+}
+
+export async function updateOtherIncome(id: string, patch: Partial<OtherIncomePayload>) {
+  const { error } = await supabase.from("other_incomes").update(patch as never).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteOtherIncome(id: string) {
+  const { error } = await supabase.from("other_incomes").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+/* ---- agregasi untuk laporan ---- */
+
+export type TenantRecap = {
+  tenantId: string;
+  name: string;
+  room: string | null;
+  count: number;
+  total: number;
+  coveredUntil: string | null;
+};
+
+export function recapByTenant(incomes: Income[]): TenantRecap[] {
+  const map = new Map<string, TenantRecap>();
+  for (const income of incomes) {
+    const key = income.tenant_id || income.tenant_name;
+    let row = map.get(key);
+    if (!row) {
+      row = {
+        tenantId: key,
+        name: income.tenant_name,
+        room: income.room_number,
+        count: 0,
+        total: 0,
+        coveredUntil: null,
+      };
+      map.set(key, row);
+    }
+    row.count += 1;
+    row.total += income.amount || 0;
+    const end = income.end_date;
+    if (end && (!row.coveredUntil || end > row.coveredUntil)) row.coveredUntil = end;
+  }
+  return [...map.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, "id"));
+}
+
+export type PeriodRecap = {
+  month: string;
+  kos: number;
+  lain: number;
+  total: number;
+  count: number;
+};
+
+export function recapByMonth(incomes: Income[], others: OtherIncome[]): PeriodRecap[] {
+  const map = new Map<string, PeriodRecap>();
+  const bucket = (month: string) => {
+    let row = map.get(month);
+    if (!row) {
+      row = { month, kos: 0, lain: 0, total: 0, count: 0 };
+      map.set(month, row);
+    }
+    return row;
+  };
+  for (const income of incomes) {
+    const row = bucket(income.payment_date.slice(0, 7));
+    row.kos += income.amount || 0;
+    row.total += income.amount || 0;
+    row.count += 1;
+  }
+  for (const other of others) {
+    const row = bucket(other.income_date.slice(0, 7));
+    row.lain += other.amount || 0;
+    row.total += other.amount || 0;
+    row.count += 1;
+  }
+  return [...map.values()].sort((a, b) => b.month.localeCompare(a.month));
+}
+
+export function formatMonth(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  if (!y || !m) return month;
+  return new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric" }).format(
+    new Date(y, m - 1, 1),
+  );
+}
+
+export function totalByMethod(incomes: Income[], others: OtherIncome[]) {
+  return PAYMENT_METHODS.map((method) => ({
+    method,
+    total:
+      incomes.filter((i) => i.payment_method === method).reduce((s, i) => s + (i.amount || 0), 0) +
+      others.filter((o) => o.payment_method === method).reduce((s, o) => s + (o.amount || 0), 0),
+  }));
+}

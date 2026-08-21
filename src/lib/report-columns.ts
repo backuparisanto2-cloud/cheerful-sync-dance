@@ -53,6 +53,7 @@ export type ColumnType = "text" | "number" | "currency" | "date";
 
 export type ColumnKey =
   | "name"
+  | "code"
   | "scope"
   | "group"
   | "floor"
@@ -80,6 +81,7 @@ export type ColumnDef = {
 
 export const ALL_COLUMNS: ColumnDef[] = [
   { key: "name", label: "Nama Barang", type: "text", value: (r) => r.name },
+  { key: "code", label: "Kode Inventaris", type: "text", value: (r) => r.code },
   {
     key: "scope",
     label: "Jenis",
@@ -109,6 +111,7 @@ export const COLUMN_MAP = new Map(ALL_COLUMNS.map((c) => [c.key, c]));
 export type ColumnConfig = { key: ColumnKey; label: string; visible: boolean };
 
 export const DEFAULT_COLUMN_KEYS: ColumnKey[] = [
+  "code",
   "name",
   "group",
   "quantity",
