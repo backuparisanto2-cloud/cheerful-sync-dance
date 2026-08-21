@@ -49,7 +49,7 @@ export function ProofUploader({
   }
 
   async function uploadOne(entry: Entry, current: string[]): Promise<string[]> {
-    patch(entry.id, { status: "mengunggah", message: undefined });
+    patch(entry.id, { status: "mengunggah" });
     try {
       const added = await uploadAttachment(entry.file, folder);
       patch(entry.id, { status: "berhasil" });
