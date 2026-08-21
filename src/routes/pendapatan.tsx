@@ -12,6 +12,11 @@ import {
   toIncomePayload,
 } from "@/components/IncomeFormDialog";
 import { TenantFormDialog, tenantInitial, toTenantPayload } from "@/components/TenantFormDialog";
+import {
+  OtherIncomeFormDialog,
+  otherIncomeInitial,
+  toOtherIncomePayload,
+} from "@/components/OtherIncomeFormDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -37,12 +42,16 @@ import {
   PAYMENT_METHODS,
   PERIOD_TYPES,
   addIncome,
+  addOtherIncome,
   addTenant,
   deleteIncome,
+  deleteOtherIncome,
   deleteTenant,
   incomesQuery,
+  otherIncomesQuery,
   tenantsQuery,
   updateIncome,
+  updateOtherIncome,
   updateTenant,
 } from "@/lib/income";
 
@@ -77,10 +86,12 @@ function IncomePage() {
 
   const { data: tenants = [] } = useQuery(tenantsQuery);
   const { data: incomes = [], isLoading } = useQuery(incomesQuery);
+  const { data: others = [] } = useQuery(otherIncomesQuery);
 
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: incomesQuery.queryKey });
     void qc.invalidateQueries({ queryKey: tenantsQuery.queryKey });
+    void qc.invalidateQueries({ queryKey: otherIncomesQuery.queryKey });
   };
 
   const createIncome = useMutation({
@@ -103,6 +114,28 @@ function IncomePage() {
     onSuccess: () => {
       invalidate();
       toast.success("Pendapatan dihapus");
+    },
+  });
+  const createOther = useMutation({
+    mutationFn: addOtherIncome,
+    onSuccess: () => {
+      invalidate();
+      toast.success("Pendapatan lain-lain dicatat");
+    },
+  });
+  const editOther = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: Parameters<typeof updateOtherIncome>[1] }) =>
+      updateOtherIncome(id, patch),
+    onSuccess: () => {
+      invalidate();
+      toast.success("Pendapatan lain-lain diperbarui");
+    },
+  });
+  const removeOther = useMutation({
+    mutationFn: deleteOtherIncome,
+    onSuccess: () => {
+      invalidate();
+      toast.success("Pendapatan lain-lain dihapus");
     },
   });
   const createTenant = useMutation({
@@ -142,7 +175,22 @@ function IncomePage() {
     });
   }, [incomes, keyword, method, period, from, to]);
 
-  const total = filtered.reduce((sum, i) => sum + (i.amount || 0), 0);
+  const filteredOthers = useMemo(() => {
+    const kw = keyword.trim().toLowerCase();
+    return others.filter((o) => {
+      if (method !== "Semua" && o.payment_method !== method) return false;
+      if (from && o.income_date < from) return false;
+      if (to && o.income_date > to) return false;
+      if (!kw) return true;
+      return [o.name, o.payer, o.description, o.payment_method]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(kw));
+    });
+  }, [others, keyword, method, from, to]);
+
+  const totalKos = filtered.reduce((sum, i) => sum + (i.amount || 0), 0);
+  const totalLain = filteredOthers.reduce((sum, o) => sum + (o.amount || 0), 0);
+  const total = totalKos + totalLain;
   const activeTenants = tenants.filter((t) => t.status === "Aktif");
 
   return (
@@ -158,7 +206,12 @@ function IncomePage() {
           <p className="mt-1 font-display text-2xl font-semibold text-primary">
             {formatRupiah(total)}
           </p>
-          <p className="text-xs text-muted-foreground">{filtered.length} pembayaran</p>
+          <p className="text-xs text-muted-foreground">
+            {filtered.length} pembayaran kos + {filteredOthers.length} lain-lain
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            Kos {formatRupiah(totalKos)} • Lain-lain {formatRupiah(totalLain)}
+          </p>
         </div>
         <div className="rounded-lg border border-gold-line bg-card p-4">
           <p className="text-[11px] tracking-[0.16em] text-muted-foreground uppercase">
@@ -172,7 +225,10 @@ function IncomePage() {
             <p className="text-[11px] tracking-[0.16em] text-muted-foreground uppercase">{m}</p>
             <p className="mt-1 font-display text-lg font-semibold">
               {formatRupiah(
-                filtered.filter((i) => i.payment_method === m).reduce((s, i) => s + i.amount, 0),
+                filtered.filter((i) => i.payment_method === m).reduce((s, i) => s + i.amount, 0) +
+                  filteredOthers
+                    .filter((o) => o.payment_method === m)
+                    .reduce((s, o) => s + o.amount, 0),
               )}
             </p>
           </div>
@@ -232,6 +288,17 @@ function IncomePage() {
           trigger={
             <Button>
               <Plus className="mr-2 h-4 w-4" /> Catat pembayaran
+            </Button>
+          }
+        />
+        <OtherIncomeFormDialog
+          title="Catat pendapatan lain-lain"
+          onSubmit={async (values) => {
+            await createOther.mutateAsync(toOtherIncomePayload(values));
+          }}
+          trigger={
+            <Button variant="secondary">
+              <Plus className="mr-2 h-4 w-4" /> Pendapatan lain-lain
             </Button>
           }
         />
@@ -386,7 +453,10 @@ function IncomePage() {
                           <AlertDialogHeader>
                             <AlertDialogTitle>Hapus pendapatan?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Pembayaran “{income.tenant_name}” akan dihapus permanen.
+                              Pembayaran <strong>{income.tenant_name}</strong> tanggal{" "}
+                              {formatTanggal(income.payment_date)} sebesar{" "}
+                              {formatRupiah(income.amount)} ({income.period_type}) akan dihapus
+                              permanen. Tindakan ini tidak bisa dibatalkan.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
