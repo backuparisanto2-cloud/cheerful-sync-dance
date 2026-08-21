@@ -5,6 +5,8 @@ import {
   Wrench,
   FileBarChart,
   Wallet,
+  Coins,
+
   Menu,
   Type,
 } from "lucide-react";
