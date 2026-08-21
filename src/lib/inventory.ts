@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { compressToWebp, webpFileName } from "@/lib/image-compress";
+import { buildItemCode, codePrefix } from "@/lib/item-code";
 
 export const PHOTO_BUCKET = "inventory-photos";
 
@@ -34,6 +35,7 @@ export type Room = {
 };
 
 type PurchaseFields = {
+  code: string | null;
   brand: string | null;
   serial_number: string | null;
   vendor: string | null;
@@ -77,7 +79,7 @@ function normalize<T extends { photos: unknown; receipts: unknown }>(row: T) {
 }
 
 const ITEM_COLUMNS =
-  "brand, serial_number, vendor, purchase_price, purchase_date, warranty_until, photos, receipts";
+  "code, brand, serial_number, vendor, purchase_price, purchase_date, warranty_until, photos, receipts";
 
 export const roomsQuery = {
   queryKey: ["rooms"] as const,
@@ -135,6 +137,7 @@ export async function addCondition(name: string) {
 
 export type ItemPayload = {
   name: string;
+  code?: string | null;
   brand?: string | null;
   serial_number?: string | null;
   quantity: number;
@@ -148,15 +151,62 @@ export type ItemPayload = {
   receipts?: string[];
 };
 
+/* ---- kode unik inventaris ---- */
+
+type ItemTable = "room_items" | "shared_items";
+
+async function existingCodes(prefix: string): Promise<(string | null)[]> {
+  const [a, b] = await Promise.all([
+    supabase.from("room_items").select("code").like("code", `${prefix}-%`),
+    supabase.from("shared_items").select("code").like("code", `${prefix}-%`),
+  ]);
+  const rows = [...(a.data ?? []), ...(b.data ?? [])] as { code: string | null }[];
+  return rows.map((r) => r.code);
+}
+
+/** Kode baru berdasarkan nama + tanggal beli; null jika tanggal beli belum ada. */
+export async function generateItemCode(
+  name: string,
+  purchaseDate: string | null | undefined,
+): Promise<string | null> {
+  const prefix = codePrefix(name, purchaseDate);
+  if (!prefix) return null;
+  return buildItemCode(name, purchaseDate, await existingCodes(prefix));
+}
+
+/** Kode untuk update: dipertahankan jika masih cocok, dibuat ulang jika nama/tanggal berubah. */
+async function codeForUpdate(
+  table: ItemTable,
+  id: string,
+  patch: Partial<ItemPayload>,
+): Promise<string | null | undefined> {
+  if (!("name" in patch) && !("purchase_date" in patch)) return undefined;
+  const { data } = await supabase
+    .from(table)
+    .select("name, purchase_date, code")
+    .eq("id", id)
+    .maybeSingle();
+  const current = (data ?? null) as { name: string; purchase_date: string | null; code: string | null } | null;
+  const name = patch.name ?? current?.name ?? "";
+  const date = "purchase_date" in patch ? patch.purchase_date : current?.purchase_date;
+  const prefix = codePrefix(name, date ?? null);
+  if (!prefix) return null;
+  if (current?.code && current.code.startsWith(`${prefix}-`)) return current.code;
+  return buildItemCode(name, date ?? null, await existingCodes(prefix));
+}
+
 /* ---- mutations ---- */
 
 export async function addRoomItem(input: ItemPayload & { room_id: string }) {
-  const { error } = await supabase.from("room_items").insert(input as never);
+  const code = input.code ?? (await generateItemCode(input.name, input.purchase_date));
+  const { error } = await supabase.from("room_items").insert({ ...input, code } as never);
   if (error) throw new Error(error.message);
 }
 
 export async function updateRoomItem(id: string, patch: Partial<ItemPayload>) {
-  const { error } = await supabase.from("room_items").update(patch as never).eq("id", id);
+  const code = await codeForUpdate("room_items", id, patch);
+  const next = code === undefined ? patch : { ...patch, code };
+  const { error } = await supabase.from("room_items").update(next as never).eq("id", id);
   if (error) throw new Error(error.message);
 }
 
@@ -166,7 +216,8 @@ export async function deleteRoomItem(id: string) {
 }
 
 export async function addSharedItem(input: ItemPayload & { category: string; location?: string | null }) {
-  const { error } = await supabase.from("shared_items").insert(input as never);
+  const code = input.code ?? (await generateItemCode(input.name, input.purchase_date));
+  const { error } = await supabase.from("shared_items").insert({ ...input, code } as never);
   if (error) throw new Error(error.message);
 }
 
@@ -174,7 +225,9 @@ export async function updateSharedItem(
   id: string,
   patch: Partial<ItemPayload & { category: string; location: string | null }>,
 ) {
-  const { error } = await supabase.from("shared_items").update(patch as never).eq("id", id);
+  const code = await codeForUpdate("shared_items", id, patch);
+  const next = code === undefined ? patch : { ...patch, code };
+  const { error } = await supabase.from("shared_items").update(next as never).eq("id", id);
   if (error) throw new Error(error.message);
 }
 
